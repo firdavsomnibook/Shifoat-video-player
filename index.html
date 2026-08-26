@@ -148,6 +148,7 @@
     background:var(--surface-2);border:2px solid var(--line);color:var(--muted);
   }
   .node.done .dot{background:var(--green);border-color:var(--green);color:#062;}
+  .node.done.flagged .dot{background:var(--amber);border-color:var(--amber);color:#3a2600;}
   .node.current .dot{background:var(--amber);border-color:var(--amber);color:#1a1400;box-shadow:0 0 0 4px rgba(242,183,5,.18);}
   .node.locked .dot{opacity:.6;}
   .nodeCard{
@@ -549,14 +550,11 @@ function canDeleteStudent(u){ return u.role === 'admin'; }
 
 /* ================= PROGRESS HELPERS ================= */
 function ensureProgress(userId){
-  if(!PROGRESS[userId]) PROGRESS[userId] = { watched:{}, maxTime:{} };
-  return PROGRESS[userId];
-}
-function isVideoUnlocked(userId, index){
-  if(index === 0) return true;
-  const prog = ensureProgress(userId);
-  const prevVideo = VIDEOS[index-1];
-  return !!prog.watched[prevVideo.id];
+  if(!PROGRESS[userId]) PROGRESS[userId] = { watched:{}, maxTime:{}, skipCount:{}, flaggedPartial:{} };
+  const p = PROGRESS[userId];
+  if(!p.skipCount) p.skipCount = {};
+  if(!p.flaggedPartial) p.flaggedPartial = {};
+  return p;
 }
 
 /* ================= RENDER SHELL ================= */
@@ -616,25 +614,26 @@ function renderVideosTab(content){
   const prog = ensureProgress(CURRENT.id);
 
   VIDEOS.forEach((v, idx)=>{
-    const unlocked = isVideoUnlocked(CURRENT.id, idx);
     const done = !!prog.watched[v.id];
+    const flagged = !!prog.flaggedPartial[v.id];
     const node = document.createElement('div');
-    node.className = 'node ' + (done ? 'done' : (unlocked ? 'current' : 'locked'));
+    node.className = 'node ' + (done ? 'done' : 'current') + (flagged ? ' flagged' : '');
 
     const dot = document.createElement('div');
     dot.className = 'dot';
-    dot.textContent = done ? '✓' : (unlocked ? (idx+1) : '🔒');
+    dot.textContent = done ? (flagged ? '⚠' : '✓') : (idx+1);
     node.appendChild(dot);
 
     const card = document.createElement('div');
     card.className = 'nodeCard';
     const left = document.createElement('div');
+    let hintText = done ? "Ko'rib bo'lingan" : "Ko'rishga tayyor";
+    if(done && flagged) hintText = "Ko'rib bo'lingan (sakragan holda)";
     left.innerHTML = `<div class="title">${escapeHtml(v.title)}</div>
-      <div class="hint">${done ? "Ko'rib bo'lingan" : (unlocked ? "Ko'rishga tayyor" : "Avvalgi videoni tugating")}</div>`;
+      <div class="hint">${hintText}</div>`;
     const btn = document.createElement('button');
     btn.className = 'go';
-    btn.textContent = unlocked ? "Ko'rish" : "Qulflangan";
-    btn.disabled = !unlocked;
+    btn.textContent = "Ko'rish";
     btn.onclick = ()=>{ PLAYING_VIDEO_ID = v.id; renderApp(); };
     card.appendChild(left);
     card.appendChild(btn);
@@ -832,23 +831,23 @@ function renderYoutubePlayer(wrap, v){
           };
 
           let promptShown = false;
+          let lastKnownTime = 0;
           if(ACTIVE_YT_POLL) clearInterval(ACTIVE_YT_POLL);
           ACTIVE_YT_POLL = setInterval(()=>{
             try{
               const t = player.getCurrentTime();
               const dur = player.getDuration() || 0;
-              if(t > prog.maxTime[v.id] + 0.6){
-                player.seekTo(prog.maxTime[v.id], true);
-              } else if(t > prog.maxTime[v.id]){
+              // Sakrash endi taqiqlanmaydi, faqat hisoblanadi (adminga ko'rinishi uchun)
+              if(t > lastKnownTime + 2){
+                registerSkip(v.id, prog);
+              }
+              lastKnownTime = t;
+              if(t > prog.maxTime[v.id]){
                 prog.maxTime[v.id] = t;
               }
-              if(dur && prog.maxTime[v.id] >= dur - 0.8 && !promptShown){
+              if(dur && t >= dur - 0.8 && !promptShown){
                 promptShown = true;
-                if(!prog.watched[v.id]){
-                  prog.watched[v.id] = true;
-                  saveProgress(CURRENT.id);
-                }
-                toast("Video tugatildi ✓");
+                finishVideo(v, prog);
                 renderNextPrompt(wrap, v);
                 clearInterval(ACTIVE_YT_POLL);
                 return;
@@ -863,17 +862,9 @@ function renderYoutubePlayer(wrap, v){
           }, 300);
         },
         onStateChange: (e)=>{
-          if(e.data === YT.PlayerState.ENDED){
-            const dur = player.getDuration() || 0;
-            if(!prog.watched[v.id] && (!dur || prog.maxTime[v.id] >= dur * 0.85)){
-              prog.watched[v.id] = true;
-              saveProgress(CURRENT.id);
-              toast("Video tugatildi ✓");
-              renderNextPrompt(wrap, v);
-            } else if(!prog.watched[v.id]){
-              player.seekTo(prog.maxTime[v.id], true);
-              toast("Videoni to'liq ko'rishingiz kerak — sakrab o'tib bo'lmaydi");
-            }
+          if(e.data === YT.PlayerState.ENDED && !prog.watched[v.id]){
+            finishVideo(v, prog);
+            renderNextPrompt(wrap, v);
           }
         },
         onError: (e)=>{
@@ -977,37 +968,25 @@ function renderPlayer(content, videoId){
     }
     // video deyarli oxirigacha yetganda ("tugadi" signali kelmasa/kech kelsa ham) o'zimiz belgilaymiz va tugmani chiqaramiz
     const dur = video.duration || 0;
-    if(dur && prog.maxTime[v.id] >= dur - 0.8 && !nativePromptShown){
+    if(dur && video.currentTime >= dur - 0.8 && !nativePromptShown){
       nativePromptShown = true;
-      if(!prog.watched[v.id]){
-        prog.watched[v.id] = true;
-        saveProgress(CURRENT.id);
-      }
-      toast("Video tugatildi ✓");
+      finishVideo(v, prog);
       renderNextPrompt(wrap, v);
     }
   });
   video.addEventListener('seeking', ()=>{
-    // haqiqatan ko'rilgan nuqtadan oldinga sakrashga (hatto ozgina bo'lsa ham) yo'l qo'ymaymiz
-    if(video.currentTime > prog.maxTime[v.id] + 0.4){
-      video.currentTime = prog.maxTime[v.id];
+    // Sakrash endi taqiqlanmaydi, faqat hisoblanadi (adminga ko'rinishi uchun)
+    if(video.currentTime > prog.maxTime[v.id] + 2){
+      registerSkip(v.id, prog);
+    }
+    if(video.currentTime > prog.maxTime[v.id]){
+      prog.maxTime[v.id] = video.currentTime;
     }
   });
   video.addEventListener('ended', async ()=>{
-    // Zaxira: agar yuqoridagi timeupdate tekshiruvi biror sababga ko'ra ushlamagan bo'lsa, shu yerda tutamiz
-    const dur = video.duration || 0;
-    if(!prog.watched[v.id] && dur && prog.maxTime[v.id] < dur * 0.85){
-      video.currentTime = prog.maxTime[v.id];
-      toast("Videoni to'liq ko'rishingiz kerak — sakrab o'tib bo'lmaydi");
-      return;
-    }
     if(!nativePromptShown){
       nativePromptShown = true;
-      if(!prog.watched[v.id]){
-        prog.watched[v.id] = true;
-        await saveProgress(CURRENT.id);
-      }
-      toast("Video tugatildi ✓");
+      finishVideo(v, prog);
       renderNextPrompt(wrap, v);
     }
   });
@@ -1028,6 +1007,21 @@ function renderPlayer(content, videoId){
 }
 
 /* ================= VIDEO TUGAGANDA "KEYINGISI" TUGMASI ================= */
+/* ================= SAKRASHNI HISOBLASH VA "CHALA KO'RGAN" BELGISI ================= */
+function registerSkip(videoId, prog){
+  prog.skipCount[videoId] = (prog.skipCount[videoId] || 0) + 1;
+}
+function finishVideo(v, prog){
+  if(prog.skipCount[v.id] >= 3){
+    prog.flaggedPartial[v.id] = true;
+  }
+  if(!prog.watched[v.id]){
+    prog.watched[v.id] = true;
+  }
+  saveProgress(CURRENT.id);
+  toast(prog.flaggedPartial[v.id] ? "Video tugatildi (sakragan holda) ⚠️" : "Video tugatildi ✓");
+}
+
 function renderNextPrompt(container, v){
   if(container.querySelector('.nextPromptCard')) return; // ikki marta chiqmasin
   const idx = VIDEOS.findIndex(x=>x.id===v.id);
@@ -1218,9 +1212,16 @@ function renderStudentsTab(content){
       const prog = ensureProgress(s.id);
       const watchedCount = VIDEOS.filter(v=>prog.watched[v.id]).length;
       const percent = totalVideos ? Math.round((watchedCount/totalVideos)*100) : 0;
-      const progressText = totalVideos
+      let progressText = totalVideos
         ? `${watchedCount}/${totalVideos} ta video (${percent}%)`
         : 'Video yo\'q';
+      // Sakragan (chala ko'rgan) videolar ro'yxati
+      const flaggedTitles = VIDEOS
+        .map((v, idx) => prog.flaggedPartial[v.id] ? (idx+1) : null)
+        .filter(x => x !== null);
+      if(flaggedTitles.length){
+        progressText += `<br><span style="color:var(--amber);font-size:12px;">⚠️ ${flaggedTitles.join(', ')}-videoni chala ko'rgan (sakragan)</span>`;
+      }
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${escapeHtml(s.username)}</td>
         <td><code class="mono">${s.password ? escapeHtml(s.password) : "parolsiz"}</code></td>
