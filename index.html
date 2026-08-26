@@ -550,11 +550,27 @@ function canDeleteStudent(u){ return u.role === 'admin'; }
 
 /* ================= PROGRESS HELPERS ================= */
 function ensureProgress(userId){
-  if(!PROGRESS[userId]) PROGRESS[userId] = { watched:{}, maxTime:{}, skipCount:{}, flaggedPartial:{} };
+  if(!PROGRESS[userId]) PROGRESS[userId] = { watched:{}, maxTime:{}, skipCount:{}, flaggedPartial:{}, percent:{} };
   const p = PROGRESS[userId];
   if(!p.skipCount) p.skipCount = {};
   if(!p.flaggedPartial) p.flaggedPartial = {};
+  if(!p.percent) p.percent = {};
   return p;
+}
+
+/* Foizni saqlashda serverga har safar emas, 4 soniyada bir marta yozamiz (ortiqcha yuklamaslik uchun) */
+let _percentSaveTimers = {};
+function updatePercent(videoId, prog, dur){
+  if(!dur) return;
+  const pct = Math.min(100, Math.round((prog.maxTime[videoId] / dur) * 100));
+  if(prog.percent[videoId] === pct) return;
+  prog.percent[videoId] = pct;
+  const key = CURRENT.id + ':' + videoId;
+  if(_percentSaveTimers[key]) return;
+  _percentSaveTimers[key] = setTimeout(()=>{
+    delete _percentSaveTimers[key];
+    saveProgress(CURRENT.id);
+  }, 4000);
 }
 
 /* ================= RENDER SHELL ================= */
@@ -563,6 +579,7 @@ function tabsForUser(u){
   if(canAddVideo(u)) tabs.push({id:'addvideo', label:'Video qo\'shish'});
   if(canDeleteVideo(u)) tabs.push({id:'managevideos', label:'Videolarni boshqarish'});
   if(canManageStudents(u)) tabs.push({id:'students', label:'O\'quvchilar boshqaruvi'});
+  if(canManageStudents(u)) tabs.push({id:'results', label:'Natijalar'});
   return tabs;
 }
 
@@ -582,8 +599,8 @@ function renderApp(){
     b.onclick = async ()=>{
       ACTIVE_TAB = t.id;
       PLAYING_VIDEO_ID = null;
-      if(t.id === 'students'){
-        // O'quvchilar bo'limiga kirganda, eng so'nggi progressni serverdan qayta yuklaymiz
+      if(t.id === 'students' || t.id === 'results'){
+        // Bu bo'limlarga kirganda, eng so'nggi progressni serverdan qayta yuklaymiz
         try{
           const [freshUsers, freshProgress] = await Promise.all([fetchUsers(), fetchAllProgress()]);
           USERS = freshUsers;
@@ -601,6 +618,71 @@ function renderApp(){
   else if(ACTIVE_TAB === 'addvideo') renderAddVideoTab(content);
   else if(ACTIVE_TAB === 'managevideos') renderManageVideosTab(content);
   else if(ACTIVE_TAB === 'students') renderStudentsTab(content);
+  else if(ACTIVE_TAB === 'results') renderResultsTab(content);
+}
+
+/* ================= NATIJALAR TAB ================= */
+function renderResultsTab(content){
+  const h = document.createElement('h2');
+  h.style.display = 'flex';
+  h.style.alignItems = 'center';
+  h.style.gap = '12px';
+  h.textContent = "Natijalar";
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'btn btn-secondary';
+  refreshBtn.style.cssText = 'width:auto;font-size:13px;padding:6px 12px;';
+  refreshBtn.textContent = '🔄 Yangilash';
+  refreshBtn.onclick = async ()=>{
+    refreshBtn.textContent = '...';
+    try{
+      const [freshUsers, freshProgress] = await Promise.all([fetchUsers(), fetchAllProgress()]);
+      USERS = freshUsers;
+      PROGRESS = freshProgress;
+    }catch(e){}
+    renderApp();
+  };
+  h.appendChild(refreshBtn);
+  content.appendChild(h);
+
+  const students = USERS.filter(u=>u.role==='student');
+  if(!students.length){
+    const e = document.createElement('div');
+    e.className = 'emptyState';
+    e.textContent = "Hozircha o'quvchi yo'q";
+    content.appendChild(e);
+    return;
+  }
+  if(!VIDEOS.length){
+    const e = document.createElement('div');
+    e.className = 'emptyState';
+    e.textContent = "Hozircha video yo'q";
+    content.appendChild(e);
+    return;
+  }
+
+  students.forEach(s=>{
+    const prog = ensureProgress(s.id);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<h3>${escapeHtml(s.username)}</h3>`;
+    const table = document.createElement('table');
+    table.innerHTML = `<tr><th>Video</th><th>Foiz</th><th>Holat</th></tr>`;
+    VIDEOS.forEach((v, idx)=>{
+      const done = !!prog.watched[v.id];
+      const flagged = !!prog.flaggedPartial[v.id];
+      const pct = done ? 100 : (prog.percent[v.id] || 0);
+      let statusHtml;
+      if(done && flagged) statusHtml = '<span style="color:var(--amber);">⚠️ Sakragan</span>';
+      else if(done) statusHtml = '<span style="color:var(--green);">✓ Tugatgan</span>';
+      else if(pct > 0) statusHtml = '<span class="muted">Davom etmoqda</span>';
+      else statusHtml = '<span class="muted">Boshlamagan</span>';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx+1}. ${escapeHtml(v.title)}</td><td>${pct}%</td><td>${statusHtml}</td>`;
+      table.appendChild(tr);
+    });
+    card.appendChild(table);
+    content.appendChild(card);
+  });
 }
 
 /* ================= VIDEOS TAB ================= */
@@ -850,7 +932,7 @@ function renderYoutubePlayer(wrap, v){
               const t = player.getCurrentTime();
               const dur = player.getDuration() || 0;
               // Sakrash endi taqiqlanmaydi, faqat hisoblanadi (adminga ko'rinishi uchun)
-              if(t > lastKnownTime + 2){
+              if(t > lastKnownTime + 1){
                 registerSkip(v.id, prog);
                 // Boshini deyarli ko'rmasdan, to'g'ridan-to'g'ri oxiriga sakrasa — darhol "chala ko'rgan" deb belgilaymiz
                 if(dur && t > dur * 0.7 && prog.maxTime[v.id] < dur * 0.3){
@@ -861,6 +943,7 @@ function renderYoutubePlayer(wrap, v){
               if(t > prog.maxTime[v.id]){
                 prog.maxTime[v.id] = t;
               }
+              updatePercent(v.id, prog, dur);
               if(dur && t >= dur - 0.8 && !promptShown){
                 promptShown = true;
                 finishVideo(v, prog);
@@ -982,8 +1065,9 @@ function renderPlayer(content, videoId){
     if(video.currentTime > prog.maxTime[v.id]){
       prog.maxTime[v.id] = video.currentTime;
     }
-    // video deyarli oxirigacha yetganda ("tugadi" signali kelmasa/kech kelsa ham) o'zimiz belgilaymiz va tugmani chiqaramiz
     const dur = video.duration || 0;
+    updatePercent(v.id, prog, dur);
+    // video deyarli oxirigacha yetganda ("tugadi" signali kelmasa/kech kelsa ham) o'zimiz belgilaymiz va tugmani chiqaramiz
     if(dur && video.currentTime >= dur - 0.8 && !nativePromptShown){
       nativePromptShown = true;
       finishVideo(v, prog);
@@ -992,7 +1076,7 @@ function renderPlayer(content, videoId){
   });
   video.addEventListener('seeking', ()=>{
     // Sakrash endi taqiqlanmaydi, faqat hisoblanadi (adminga ko'rinishi uchun)
-    if(video.currentTime > prog.maxTime[v.id] + 2){
+    if(video.currentTime > prog.maxTime[v.id] + 1){
       registerSkip(v.id, prog);
       // Boshini deyarli ko'rmasdan, to'g'ridan-to'g'ri oxiriga sakrasa — darhol "chala ko'rgan" deb belgilaymiz
       const dur = video.duration || 0;
@@ -1033,12 +1117,13 @@ function registerSkip(videoId, prog){
   prog.skipCount[videoId] = (prog.skipCount[videoId] || 0) + 1;
 }
 function finishVideo(v, prog){
-  if(prog.skipCount[v.id] >= 3){
+  if(prog.skipCount[v.id] >= 1){
     prog.flaggedPartial[v.id] = true;
   }
   if(!prog.watched[v.id]){
     prog.watched[v.id] = true;
   }
+  prog.percent[v.id] = 100;
   saveProgress(CURRENT.id);
   toast(prog.flaggedPartial[v.id] ? "Video tugatildi (sakragan holda) ⚠️" : "Video tugatildi ✓");
 }
