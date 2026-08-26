@@ -875,6 +875,17 @@ function renderYoutubePlayer(wrap, v){
               toast("Videoni to'liq ko'rishingiz kerak — sakrab o'tib bo'lmaydi");
             }
           }
+        },
+        onError: (e)=>{
+          if(ACTIVE_YT_POLL) clearInterval(ACTIVE_YT_POLL);
+          const codes = {2:"Video havolasi noto'g'ri", 5:"Pleyerda texnik xato",
+            100:"Video topilmadi yoki o'chirilgan", 101:"Video egasi boshqa saytlarga joylashtirishni taqiqlagan",
+            150:"Video egasi boshqa saytlarga joylashtirishni taqiqlagan"};
+          const msg = codes[e.data] || "Noma'lum xato";
+          outerDiv.innerHTML = `<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text);text-align:center;padding:20px;">
+            <div style="font-size:15px;font-weight:600;margin-bottom:8px;">⚠️ ${msg}</div>
+            <div style="font-size:12px;color:var(--muted);max-width:340px;">Bu YouTube video sizning saytingizga (embed) joylashtirishga ruxsat bermaydi — bu ko'pincha rasmiy musiqiy klip/kinolarda bo'ladi. Boshqa video bilan sinab ko'ring (masalan o'zingiz yuklagan video).</div>
+          </div>`;
         }
       }
     });
@@ -1014,20 +1025,35 @@ function renderNextPrompt(container, v){
   const box = document.createElement('div');
   box.className = 'card nextPromptCard';
   box.style.textAlign = 'center';
-  box.innerHTML = `<h3 style="margin-top:0;color:var(--green);">✓ Video tugatildi</h3>`;
+
+  const goNext = ()=>{
+    if(hasNext){ PLAYING_VIDEO_ID = VIDEOS[idx+1].id; }
+    else { PLAYING_VIDEO_ID = null; }
+    renderApp();
+  };
+
+  box.innerHTML = `<h3 style="margin-top:0;color:var(--green);">✓ Video tugatildi</h3>
+    <p class="muted" style="font-size:13px;">${hasNext ? 'Keyingi video ' : 'Ro\'yxatga '}<span id="nextCountdown">3</span> soniyadan so\'ng avtomatik ochiladi...</p>`;
+
   const btn = document.createElement('button');
   btn.className = 'btn btn-primary';
   btn.style.width = 'auto';
-  if(hasNext){
-    btn.textContent = "Keyingisi →";
-    btn.onclick = ()=>{ PLAYING_VIDEO_ID = VIDEOS[idx+1].id; renderApp(); };
-  } else {
-    btn.textContent = "Ro'yxatga qaytish";
-    btn.onclick = ()=>{ PLAYING_VIDEO_ID = null; renderApp(); };
-  }
+  btn.textContent = hasNext ? "Hoziroq keyingisiga o'tish →" : "Ro'yxatga qaytish";
+  btn.onclick = ()=>{ clearInterval(timer); goNext(); };
   box.appendChild(document.createElement('br'));
   box.appendChild(btn);
   container.appendChild(box);
+
+  let secondsLeft = 3;
+  const countdownEl = box.querySelector('#nextCountdown');
+  const timer = setInterval(()=>{
+    secondsLeft--;
+    if(countdownEl) countdownEl.textContent = secondsLeft;
+    if(secondsLeft <= 0){
+      clearInterval(timer);
+      goNext();
+    }
+  }, 1000);
 }
 
 function escapeHtml(s){
