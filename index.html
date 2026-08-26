@@ -579,7 +579,19 @@ function renderApp(){
     const b = document.createElement('button');
     b.className = 'tab' + (ACTIVE_TAB===t.id?' active':'');
     b.textContent = t.label;
-    b.onclick = ()=>{ ACTIVE_TAB = t.id; PLAYING_VIDEO_ID = null; renderApp(); };
+    b.onclick = async ()=>{
+      ACTIVE_TAB = t.id;
+      PLAYING_VIDEO_ID = null;
+      if(t.id === 'students'){
+        // O'quvchilar bo'limiga kirganda, eng so'nggi progressni serverdan qayta yuklaymiz
+        try{
+          const [freshUsers, freshProgress] = await Promise.all([fetchUsers(), fetchAllProgress()]);
+          USERS = freshUsers;
+          PROGRESS = freshProgress;
+        }catch(e){}
+      }
+      renderApp();
+    };
     tabsRow.appendChild(b);
   });
 
@@ -840,6 +852,10 @@ function renderYoutubePlayer(wrap, v){
               // Sakrash endi taqiqlanmaydi, faqat hisoblanadi (adminga ko'rinishi uchun)
               if(t > lastKnownTime + 2){
                 registerSkip(v.id, prog);
+                // Boshini deyarli ko'rmasdan, to'g'ridan-to'g'ri oxiriga sakrasa — darhol "chala ko'rgan" deb belgilaymiz
+                if(dur && t > dur * 0.7 && prog.maxTime[v.id] < dur * 0.3){
+                  prog.flaggedPartial[v.id] = true;
+                }
               }
               lastKnownTime = t;
               if(t > prog.maxTime[v.id]){
@@ -978,6 +994,11 @@ function renderPlayer(content, videoId){
     // Sakrash endi taqiqlanmaydi, faqat hisoblanadi (adminga ko'rinishi uchun)
     if(video.currentTime > prog.maxTime[v.id] + 2){
       registerSkip(v.id, prog);
+      // Boshini deyarli ko'rmasdan, to'g'ridan-to'g'ri oxiriga sakrasa — darhol "chala ko'rgan" deb belgilaymiz
+      const dur = video.duration || 0;
+      if(dur && video.currentTime > dur * 0.7 && prog.maxTime[v.id] < dur * 0.3){
+        prog.flaggedPartial[v.id] = true;
+      }
     }
     if(video.currentTime > prog.maxTime[v.id]){
       prog.maxTime[v.id] = video.currentTime;
@@ -1162,7 +1183,24 @@ function renderManageVideosTab(content){
 /* ================= STUDENTS TAB ================= */
 function renderStudentsTab(content){
   const h = document.createElement('h2');
+  h.style.display = 'flex';
+  h.style.alignItems = 'center';
+  h.style.gap = '12px';
   h.textContent = "O'quvchilar boshqaruvi";
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'btn btn-secondary';
+  refreshBtn.style.cssText = 'width:auto;font-size:13px;padding:6px 12px;';
+  refreshBtn.textContent = '🔄 Yangilash';
+  refreshBtn.onclick = async ()=>{
+    refreshBtn.textContent = '...';
+    try{
+      const [freshUsers, freshProgress] = await Promise.all([fetchUsers(), fetchAllProgress()]);
+      USERS = freshUsers;
+      PROGRESS = freshProgress;
+    }catch(e){}
+    renderApp();
+  };
+  h.appendChild(refreshBtn);
   content.appendChild(h);
 
   const addCard = document.createElement('div');
