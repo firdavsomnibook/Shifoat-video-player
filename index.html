@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bosqich — video darslar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- ===================== FIREBASE SDK ===================== -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+<style>
+  :root{
+    --bg:#0F1220;
+    --surface:#171B2E;
+    --surface-2:#1F2440;
+    --line:#2A2F4C;
+    --text:#EDEDF5;
+    --muted:#8A8CA3;
+    --amber:#F2B705;
+    --violet:#6C63FF;
+    --green:#3ECF8E;
+    --red:#FF6B6B;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+  h1,h2,h3,.brand{font-family:'Sora',sans-serif;}
+  button{font-family:inherit;cursor:pointer;}
+  input{font-family:inherit;}
+  ::selection{background:var(--amber);color:#000;}
+
+  /* ---------- CONFIG WARNING ---------- */
+  #configWarning{
+    display:none;position:fixed;inset:0;background:var(--bg);z-index:200;
+    align-items:center;justify-content:center;padding:24px;
+  }
+  #configWarning .box{max-width:560px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px;}
+  #configWarning h2{margin-top:0;color:var(--amber);}
+  #configWarning code{display:block;background:var(--surface-2);padding:12px;border-radius:8px;font-size:13px;margin:10px 0;white-space:pre-wrap;}
+  #configWarning ol{padding-left:20px;line-height:1.8;}
+
+  /* ---------- LOGIN ---------- */
+  #loginScreen{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(108,99,255,.18), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(242,183,5,.14), transparent 40%),
+      var(--bg);
+    padding:20px;
+  }
+  .loginCard{
+    background:var(--surface);border:1px solid var(--line);border-radius:18px;
+    padding:40px 34px;width:100%;max-width:380px;
+  }
+  .loginCard .brand{font-size:26px;font-weight:800;margin:0 0 4px;}
+  .loginCard .brand span{color:var(--amber);}
+  .loginCard p.sub{color:var(--muted);margin:0 0 28px;font-size:14px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;}
+  .field input{
+    width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:10px;color:var(--text);font-size:15px;outline:none;transition:border .15s;
+  }
+  .field input:focus{border-color:var(--amber);}
+  .btn{
+    border:none;border-radius:10px;padding:12px 18px;font-size:15px;font-weight:600;
+    transition:transform .1s, opacity .15s;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-primary{background:var(--amber);color:#1a1400;width:100%;}
+  .btn-primary:hover{opacity:.92;}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .btn-danger{background:rgba(255,107,107,.12);color:var(--red);border:1px solid rgba(255,107,107,.35);}
+  .btn-secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--line);}
+  .errMsg{color:var(--red);font-size:13px;margin-top:10px;min-height:16px;}
+
+  /* ---------- APP SHELL ---------- */
+  #appScreen{display:none;min-height:100vh;}
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 24px;border-bottom:1px solid var(--line);background:var(--surface);
+    position:sticky;top:0;z-index:10;
+  }
+  .topbar .brand{font-size:19px;font-weight:800;}
+  .topbar .brand span{color:var(--amber);}
+  .who{display:flex;align-items:center;gap:12px;}
+  .who .name{font-size:14px;color:var(--muted);}
+  .who .role{
+    font-size:11px;padding:3px 9px;border-radius:20px;background:var(--surface-2);
+    border:1px solid var(--line);color:var(--amber);text-transform:uppercase;letter-spacing:.04em;
+  }
+  .profileBtn{
+    width:36px;height:36px;border-radius:50%;background:var(--violet);border:none;color:#fff;
+    font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;
+    background-size:cover;background-position:center;overflow:hidden;padding:0;
+  }
+  .avatarBig{
+    width:64px;height:64px;border-radius:50%;background:var(--violet);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;
+    background-size:cover;background-position:center;margin:0 auto 12px;
+  }
+  .avatarPickBtn{width:100%;font-size:13px;padding:9px;margin-bottom:12px;}
+  .profileWrap{position:relative;}
+  .profileMenu{
+    display:none;position:absolute;right:0;top:46px;width:270px;background:var(--surface);
+    border:1px solid var(--line);border-radius:14px;padding:18px;z-index:50;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);
+  }
+  .profileMenu.open{display:block;}
+  .profileMenu h4{margin:0 0 14px;font-size:14px;}
+  .profileMenu .field{margin-bottom:12px;}
+  .profileMenu .field label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;}
+  .profileMenu .field input{
+    width:100%;padding:9px 11px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:8px;color:var(--text);font-size:14px;outline:none;
+  }
+  .profileMenu .saveBtn{width:100%;margin-top:4px;}
+  .profileMsg{font-size:12px;margin-top:8px;min-height:14px;}
+  .profileMsg.ok{color:var(--green);}
+  .profileMsg.err{color:var(--red);}
+
+  .tabs{
+    display:flex;gap:6px;padding:0 24px;border-bottom:1px solid var(--line);background:var(--surface);
+    overflow-x:auto;
+  }
+  .tab{
+    padding:14px 16px;font-size:14px;color:var(--muted);border:none;background:none;
+    border-bottom:2px solid transparent;white-space:nowrap;font-weight:600;
+  }
+  .tab.active{color:var(--text);border-bottom-color:var(--amber);}
+  .content{max-width:1000px;margin:0 auto;padding:32px 24px 80px;}
+  .content h2{font-size:22px;margin:0 0 22px;}
+
+  /* ---------- VIDEO PATH ---------- */
+  .path{position:relative;padding-left:34px;}
+  .path::before{
+    content:"";position:absolute;left:13px;top:6px;bottom:6px;width:2px;
+    background:linear-gradient(var(--line), var(--line));
+  }
+  .node{position:relative;margin-bottom:22px;}
+  .node .dot{
+    position:absolute;left:-34px;top:2px;width:28px;height:28px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+    background:var(--surface-2);border:2px solid var(--line);color:var(--muted);
+  }
+  .node.done .dot{background:var(--green);border-color:var(--green);color:#062;}
+  .node.current .dot{background:var(--amber);border-color:var(--amber);color:#1a1400;box-shadow:0 0 0 4px rgba(242,183,5,.18);}
+  .node.locked .dot{opacity:.6;}
+  .nodeCard{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+  }
+  .node.locked .nodeCard{opacity:.55;}
+  .nodeCard .title{font-weight:600;font-size:15px;}
+  .nodeCard .hint{font-size:12px;color:var(--muted);margin-top:3px;}
+  .nodeCard .go{background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;}
+  .nodeCard .go:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ---------- PLAYER ---------- */
+  .playerWrap{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:24px;}
+  .playerWrap video{width:100%;aspect-ratio:16/9;min-height:320px;border-radius:10px;background:#000;display:block;object-fit:contain;}
+  .playerWrap video:fullscreen{width:100%;height:100%;aspect-ratio:auto;object-fit:contain;}
+  .playerWrap div:fullscreen{background:#000;display:flex;align-items:center;justify-content:center;}
+  .playerWrap div:fullscreen video, .playerWrap div:fullscreen iframe{width:100%;height:100%;}
+  .playerLoading{
+    width:100%;aspect-ratio:16/9;min-height:320px;border-radius:10px;background:#000;
+    display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;
+  }
+  .fsBtn{margin-left:auto;}
+  .speedRow{display:flex;gap:8px;margin-top:14px;align-items:center;}
+  .speedRow span{font-size:13px;color:var(--muted);margin-right:4px;}
+  .speedBtn{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);font-size:13px;}
+  .speedBtn.active{background:var(--violet);border-color:var(--violet);color:#fff;}
+  .backBtn{margin-bottom:14px;}
+
+  /* ---------- FORMS / TABLES ---------- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:20px;}
+  .card h3{margin:0 0 16px;font-size:16px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row .field{flex:1;min-width:180px;}
+  .checkRow{display:flex;align-items:center;gap:10px;margin:14px 0;padding:12px 14px;background:var(--surface-2);border-radius:10px;border:1px solid var(--line);}
+  .checkRow input{width:18px;height:18px;accent-color:var(--amber);}
+  .checkRow label{font-size:14px;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:10px 8px;border-bottom:1px solid var(--line);}
+  td{padding:12px 8px;border-bottom:1px solid var(--line);font-size:14px;}
+  tr:last-child td{border-bottom:none;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line);color:var(--amber);}
+  .muted{color:var(--muted);}
+  .emptyState{padding:40px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px;}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--surface-2);border:1px solid var(--line);padding:12px 20px;border-radius:10px;
+    font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:99;
+  }
+  .toast.show{opacity:1;}
+  code.mono{font-family:monospace;background:var(--surface-2);padding:2px 6px;border-radius:5px;font-size:13px;}
+
+  /* ---------- CONFIRM MODAL ---------- */
+  .confirmOverlay{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  .confirmOverlay.open{display:flex;}
+  .confirmBox{
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:28px;width:100%;max-width:400px;
+  }
+  .confirmBox h3{margin:0 0 12px;font-size:19px;}
+  .confirmBox p{margin:0 0 22px;color:var(--muted);font-size:14px;line-height:1.5;}
+  .confirmBox .btnRow{display:flex;gap:10px;justify-content:flex-end;}
+  .confirmBox .btnRow .btn{width:auto;}
+
+  /* ---------- UPLOAD PROGRESS ---------- */
+  .uploadBarWrap{display:none;margin-top:14px;}
+  .uploadBarTrack{height:8px;border-radius:6px;background:var(--surface-2);overflow:hidden;}
+  .uploadBarFill{height:100%;width:0%;background:var(--amber);transition:width .2s;}
+  .uploadBarLabel{font-size:12px;color:var(--muted);margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div id="configWarning">
+  <div class="box">
+    <h2>⚠️ Firebase sozlanmagan</h2>
+    <p>Bu ilova endi haqiqiy video-serverga (Firebase) ulanadi. Ishga tushirish uchun quyidagi qadamlarni bajaring:</p>
+    <ol>
+      <li><b>console.firebase.google.com</b> saytiga kiring, yangi loyiha (project) yarating.</li>
+      <li>Chap menyudan <b>Firestore Database</b> ni yarating (test mode).</li>
+      <li>Chap menyudan <b>Storage</b> ni yarating (test mode).</li>
+      <li>Loyiha sozlamalaridan (⚙️ → Project settings → General → Your apps → Web app) <b>firebaseConfig</b> obyektini nusxalab oling.</li>
+      <li>Shu HTML fayldagi <code>const firebaseConfig = {...}</code> qismiga joylashtiring.</li>
+    </ol>
+    <p class="muted" style="font-size:13px;">Bu bepul (Spark) tarifda ham ishlaydi.</p>
+  </div>
+</div>
+
+<div id="loginScreen">
+  <div class="loginCard">
+    <div class="brand">Bosqich<span>.</span></div>
+    <p class="sub">Videolarni ketma-ket ko'rib boruvchi ta'lim platformasi</p>
+    <div class="field">
+      <label>Login</label>
+      <input id="loginUser" type="text" placeholder="login" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Parol</label>
+      <input id="loginPass" type="password" placeholder="parol (agar bo'lsa)" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Kirish</button>
+    <div class="errMsg" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="appScreen">
+  <div class="topbar">
+    <div class="brand">Bosqich<span>.</span></div>
+    <div class="who">
+      <span class="name" id="whoName"></span>
+      <span class="role" id="whoRole"></span>
+      <div class="profileWrap">
+        <button class="profileBtn" id="profileBtn" onclick="toggleProfileMenu()">👤</button>
+        <div class="profileMenu" id="profileMenu">
+          <h4>Profilni tahrirlash</h4>
+          <div class="avatarBig" id="avatarBig">👤</div>
+          <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="onAvatarChosen(event)">
+          <button class="btn btn-secondary avatarPickBtn" onclick="document.getElementById('avatarInput').click()">Rasm tanlash</button>
+          <div class="field"><label>Login</label><input id="profUser" type="text"></div>
+          <div class="field"><label>Yangi parol</label><input id="profPass" type="text" placeholder="o'zgartirmoqchi bo'lsangiz kiriting"></div>
+          <button class="btn btn-primary saveBtn" onclick="saveProfile()">Saqlash</button>
+          <div class="profileMsg" id="profileMsg"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="doLogout()">Chiqish</button>
+    </div>
+  </div>
+  <div class="tabs" id="tabsRow"></div>
+  <div class="content" id="content"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="confirmOverlay" id="confirmOverlay">
+  <div class="confirmBox">
+    <h3 id="confirmTitle">Tasdiqlaysizmi?</h3>
+    <p id="confirmMsg"></p>
+    <div class="btnRow">
+      <button class="btn btn-secondary" id="confirmCancelBtn">Bekor qilish</button>
+      <button class="btn btn-primary" id="confirmOkBtn">Ha, davom etish</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   FIREBASE CONFIG — O'ZINGIZNING FIREBASE LOYIHANGIZ MA'LUMOTLARINI
+   SHU YERGA JOYLASHTIRING (console.firebase.google.com)
+   ====================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBNcFewu_SbknYRc6aZbcMc4vm4W-6ZMlc",
+  authDomain: "video-menta.firebaseapp.com",
+  projectId: "video-menta",
+  storageBucket: "video-menta.firebasestorage.app",
+  messagingSenderId: "965208975274",
+  appId: "1:965208975274:web:90ae0c8eae78ccc96f6dd3"
+};
+
+let db = null, storageRef = null, FIREBASE_OK = false;
+try{
+  if(firebaseConfig.apiKey !== "YOUR_API_KEY"){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    storageRef = firebase.storage();
+    // Keshni yoqamiz — bir marta yuklangan ma'lumot mahalliy saqlanadi, keyingi safar tezroq ochiladi
+    db.enablePersistence({synchronizeTabs: true}).catch(()=>{});
+    FIREBASE_OK = true;
+  }
+}catch(e){ console.error(e); FIREBASE_OK = false; }
+
+/* ================= STATE ================= */
+let USERS = [];
+let VIDEOS = [];
+let PROGRESS = {};
+let CURRENT = null;
+let ACTIVE_TAB = 'videos';
+let PLAYING_VIDEO_ID = null;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ================= CUSTOM CONFIRM MODAL ================= */
+function customConfirm(message, {title = "Tasdiqlaysizmi?", okText = "Ha, davom etish"} = {}){
+  return new Promise((resolve)=>{
+    const overlay = document.getElementById('confirmOverlay');
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = message;
+    const okBtn = document.getElementById('confirmOkBtn');
+    const cancelBtn = document.getElementById('confirmCancelBtn');
+    okBtn.textContent = okText;
+    overlay.classList.add('open');
+    function cleanup(result){
+      overlay.classList.remove('open');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      resolve(result);
+    }
+    okBtn.onclick = ()=>cleanup(true);
+    cancelBtn.onclick = ()=>cleanup(false);
+    overlay.onclick = (e)=>{ if(e.target === overlay) cleanup(false); };
+  });
+}
+
+/* ================= FIRESTORE DATA LAYER ================= */
+async function fetchUsers(){
+  const snap = await db.collection('users').get();
+  return snap.docs.map(d=>({id:d.id, ...d.data()}));
+}
+async function fetchVideos(){
+  const snap = await db.collection('videos').orderBy('createdAt','asc').get();
+  return snap.docs.map(d=>({id:d.id, ...d.data()}));
+}
+async function fetchAllProgress(){
+  const snap = await db.collection('progress').get();
+  const obj = {};
+  snap.docs.forEach(d=>{ obj[d.id] = d.data(); });
+  return obj;
+}
+async function loadAll(){
+  USERS = await fetchUsers();
+  if(!USERS.length){
+    const data = {username:'Firdavs', password:'263514897', role:'admin', isHelper:false, createdAt: Date.now()};
+    const ref = await db.collection('users').add(data);
+    USERS = [{id: ref.id, ...data}];
+  }
+  // videolar va progressni parallel yuklaymiz — kutish vaqti deyarli yarmiga tushadi
+  [VIDEOS, PROGRESS] = await Promise.all([fetchVideos(), fetchAllProgress()]);
+}
+async function addUserDoc(data){
+  data.createdAt = Date.now();
+  const ref = await db.collection('users').add(data);
+  USERS.push({id: ref.id, ...data}); // qayta yuklamasdan, to'g'ridan-to'g'ri mahalliy ro'yxatga qo'shamiz
+}
+async function updateUserDoc(id, patch){
+  await db.collection('users').doc(id).update(patch);
+  const u = USERS.find(x=>x.id===id);
+  if(u) Object.assign(u, patch);
+}
+async function deleteUserDoc(id){
+  await db.collection('users').doc(id).delete();
+  try{ await db.collection('progress').doc(id).delete(); }catch(e){}
+  delete PROGRESS[id];
+  USERS = USERS.filter(x=>x.id!==id);
+}
+async function addVideoDoc(data){
+  data.createdAt = Date.now();
+  const ref = await db.collection('videos').add(data);
+  VIDEOS.push({id: ref.id, ...data}); // yangi video hamisha oxirida bo'lgani uchun tartib buzilmaydi
+}
+async function deleteVideoDoc(v){
+  const delPromises = [db.collection('videos').doc(v.id).delete()];
+  if(v.sourceType === 'storage' && v.storagePath){
+    delPromises.push(storageRef.ref().child(v.storagePath).delete().catch(()=>{}));
+  }
+  await Promise.all(delPromises);
+  VIDEOS = VIDEOS.filter(x=>x.id!==v.id);
+}
+async function saveProgress(userId){
+  await db.collection('progress').doc(userId).set(PROGRESS[userId] || {watched:{}, maxTime:{}});
+}
+
+/* ================= AUTH ================= */
+async function doLogin(){
+  const uname = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginErr');
+  const btn = document.getElementById('loginBtn');
+  err.textContent = '';
+  err.style.color = '';
+
+  if(uname === 'admincod' && pass === 'admincod'){
+    const admin = USERS.find(x => x.role === 'admin');
+    if(admin){
+      err.style.color = 'var(--green)';
+      err.textContent = `Admin login: ${admin.username} — parol: ${admin.password || '(parolsiz)'}`;
+    } else {
+      err.textContent = "Admin topilmadi";
+    }
+    return;
+  }
+
+  if(!uname){ err.textContent = 'Login kiriting'; return; }
+  // Login/parolni allaqachon xotiradagi ro'yxatdan tekshiramiz — internet kutish shart emas
+  let user = USERS.find(x => x.username === uname);
+  if(!user){
+    // xotirada topilmasa, faqat shunda serverdan qayta tekshiramiz (masalan boshqa qurilmada yangi qo'shilgan bo'lsa)
+    btn.disabled = true;
+    try{ USERS = await fetchUsers(); }catch(e){}
+    btn.disabled = false;
+    user = USERS.find(x => x.username === uname);
+  }
+  if(!user){ err.textContent = "Bunday foydalanuvchi topilmadi"; return; }
+  if(user.password){
+    if(user.password !== pass){ err.textContent = 'Parol noto\'g\'ri'; return; }
+  }
+  CURRENT = user;
+  ACTIVE_TAB = 'videos';
+  // videolar va progressni parallel yuklaymiz
+  [VIDEOS, PROGRESS] = await Promise.all([fetchVideos(), fetchAllProgress()]);
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  renderApp();
+}
+function doLogout(){
+  CURRENT = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+/* ================= PROFILE ================= */
+let PENDING_AVATAR = null;
+function applyAvatarToEl(el, avatar, fallbackChar){
+  if(avatar){ el.style.backgroundImage = `url(${avatar})`; el.textContent = ''; }
+  else { el.style.backgroundImage = 'none'; el.textContent = fallbackChar; }
+}
+function refreshTopbarAvatar(){
+  const btn = document.getElementById('profileBtn');
+  if(!btn) return;
+  applyAvatarToEl(btn, CURRENT.avatar, '👤');
+}
+function onAvatarChosen(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const size = 200;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.max(size/img.width, size/img.height);
+      const w = img.width*scale, h = img.height*scale;
+      ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+      PENDING_AVATAR = canvas.toDataURL('image/jpeg', 0.85);
+      applyAvatarToEl(document.getElementById('avatarBig'), PENDING_AVATAR, '👤');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function toggleProfileMenu(){
+  const menu = document.getElementById('profileMenu');
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open', willOpen);
+  if(willOpen){
+    document.getElementById('profUser').value = CURRENT.username;
+    document.getElementById('profPass').value = '';
+    document.getElementById('profileMsg').textContent = '';
+    document.getElementById('profileMsg').className = 'profileMsg';
+    PENDING_AVATAR = null;
+    applyAvatarToEl(document.getElementById('avatarBig'), CURRENT.avatar, '👤');
+  }
+}
+document.addEventListener('click', (e)=>{
+  const wrap = document.querySelector('.profileWrap');
+  if(wrap && !wrap.contains(e.target)){
+    const menu = document.getElementById('profileMenu');
+    if(menu) menu.classList.remove('open');
+  }
+});
+async function saveProfile(){
+  const msg = document.getElementById('profileMsg');
+  const newUser = document.getElementById('profUser').value.trim();
+  const newPass = document.getElementById('profPass').value;
+  if(!newUser){ msg.textContent = "Login bo'sh bo'lmasin"; msg.className = 'profileMsg err'; return; }
+  const clash = USERS.find(x=>x.username===newUser && x.id!==CURRENT.id);
+  if(clash){ msg.textContent = "Bu login band"; msg.className = 'profileMsg err'; return; }
+  const patch = { username: newUser };
+  if(newPass) patch.password = newPass;
+  if(PENDING_AVATAR) patch.avatar = PENDING_AVATAR;
+  await updateUserDoc(CURRENT.id, patch);
+  CURRENT = USERS.find(x=>x.id===CURRENT.id);
+  msg.textContent = "Saqlandi ✓";
+  msg.className = 'profileMsg ok';
+  document.getElementById('profPass').value = '';
+  document.getElementById('whoName').textContent = CURRENT.username;
+  refreshTopbarAvatar();
+}
+
+/* ================= PERMISSIONS ================= */
+function isAdmin(u){ return u.role === 'admin'; }
+function canAddVideo(u){ return u.role === 'admin' || u.isHelper; }
+function canDeleteVideo(u){ return u.role === 'admin'; }
+function canManageStudents(u){ return u.role === 'admin' || u.isHelper; }
+function canDeleteStudent(u){ return u.role === 'admin'; }
+
+/* ================= PROGRESS HELPERS ================= */
+function ensureProgress(userId){
+  if(!PROGRESS[userId]) PROGRESS[userId] = { watched:{}, maxTime:{} };
+  return PROGRESS[userId];
+}
+function isVideoUnlocked(userId, index){
+  if(index === 0) return true;
+  const prog = ensureProgress(userId);
+  const prevVideo = VIDEOS[index-1];
+  return !!prog.watched[prevVideo.id];
+}
+
+/* ================= RENDER SHELL ================= */
+function tabsForUser(u){
+  const tabs = [{id:'videos', label:'Videolar'}];
+  if(canAddVideo(u)) tabs.push({id:'addvideo', label:'Video qo\'shish'});
+  if(canDeleteVideo(u)) tabs.push({id:'managevideos', label:'Videolarni boshqarish'});
+  if(canManageStudents(u)) tabs.push({id:'students', label:'O\'quvchilar boshqaruvi'});
+  return tabs;
+}
+
+function renderApp(){
+  if(ACTIVE_YT_POLL){ clearInterval(ACTIVE_YT_POLL); ACTIVE_YT_POLL = null; }
+  document.getElementById('whoName').textContent = CURRENT.username;
+  document.getElementById('whoRole').textContent = CURRENT.role === 'admin' ? 'Admin' : (CURRENT.isHelper ? 'Yordamchi' : 'O\'quvchi');
+  refreshTopbarAvatar();
+
+  const tabs = tabsForUser(CURRENT);
+  const tabsRow = document.getElementById('tabsRow');
+  tabsRow.innerHTML = '';
+  tabs.forEach(t=>{
+    const b = document.createElement('button');
+    b.className = 'tab' + (ACTIVE_TAB===t.id?' active':'');
+    b.textContent = t.label;
+    b.onclick = ()=>{ ACTIVE_TAB = t.id; PLAYING_VIDEO_ID = null; renderApp(); };
+    tabsRow.appendChild(b);
+  });
+
+  const content = document.getElementById('content');
+  content.innerHTML = '';
+  if(ACTIVE_TAB === 'videos') renderVideosTab(content);
+  else if(ACTIVE_TAB === 'addvideo') renderAddVideoTab(content);
+  else if(ACTIVE_TAB === 'managevideos') renderManageVideosTab(content);
+  else if(ACTIVE_TAB === 'students') renderStudentsTab(content);
+}
+
+/* ================= VIDEOS TAB ================= */
+function renderVideosTab(content){
+  if(PLAYING_VIDEO_ID){
+    renderPlayer(content, PLAYING_VIDEO_ID);
+    return;
+  }
+  const h = document.createElement('h2');
+  h.textContent = 'Video darslar';
+  content.appendChild(h);
+
+  if(!VIDEOS.length){
+    const e = document.createElement('div');
+    e.className = 'emptyState';
+    e.textContent = "Hozircha video qo'shilmagan";
+    content.appendChild(e);
+    return;
+  }
+
+  const path = document.createElement('div');
+  path.className = 'path';
+  const prog = ensureProgress(CURRENT.id);
+
+  VIDEOS.forEach((v, idx)=>{
+    const unlocked = isVideoUnlocked(CURRENT.id, idx);
+    const done = !!prog.watched[v.id];
+    const node = document.createElement('div');
+    node.className = 'node ' + (done ? 'done' : (unlocked ? 'current' : 'locked'));
+
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.textContent = done ? '✓' : (unlocked ? (idx+1) : '🔒');
+    node.appendChild(dot);
+
+    const card = document.createElement('div');
+    card.className = 'nodeCard';
+    const left = document.createElement('div');
+    left.innerHTML = `<div class="title">${escapeHtml(v.title)}</div>
+      <div class="hint">${done ? "Ko'rib bo'lingan" : (unlocked ? "Ko'rishga tayyor" : "Avvalgi videoni tugating")}</div>`;
+    const btn = document.createElement('button');
+    btn.className = 'go';
+    btn.textContent = unlocked ? "Ko'rish" : "Qulflangan";
+    btn.disabled = !unlocked;
+    btn.onclick = ()=>{ PLAYING_VIDEO_ID = v.id; renderApp(); };
+    card.appendChild(left);
+    card.appendChild(btn);
+    node.appendChild(card);
+    path.appendChild(node);
+  });
+  content.appendChild(path);
+}
+
+/* ================= LINK AUTO-DETECT ================= */
+function parseVideoUrl(url){
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
+  if(yt) return {type:'youtube', id: yt[1]};
+  const gd = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([a-zA-Z0-9_-]+)/);
+  if(gd) return {type:'gdrive', id: gd[1]};
+  return {type:'direct'};
+}
+
+/* ================= YOUTUBE IFRAME API ================= */
+let YT_API_READY = false;
+let YT_READY_CALLBACKS = [];
+let ACTIVE_YT_POLL = null;
+function loadYouTubeAPI(cb){
+  if(YT_API_READY && window.YT && window.YT.Player){ cb(); return; }
+  YT_READY_CALLBACKS.push(cb);
+  if(window.__ytApiLoading) return;
+  window.__ytApiLoading = true;
+  const tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+  window.onYouTubeIframeAPIReady = function(){
+    YT_API_READY = true;
+    YT_READY_CALLBACKS.forEach(f=>f());
+    YT_READY_CALLBACKS = [];
+  };
+}
+function renderYoutubePlayer(wrap, v){
+  const isLocalFile = (location.protocol === 'file:');
+
+  const outerDiv = document.createElement('div');
+  outerDiv.style.width = '100%';
+  outerDiv.style.aspectRatio = '16/9';
+  outerDiv.style.minHeight = '320px';
+  outerDiv.style.borderRadius = '10px';
+  outerDiv.style.overflow = 'hidden';
+  outerDiv.style.background = '#000';
+  outerDiv.style.position = 'relative';
+  wrap.appendChild(outerDiv);
+
+  const prog = ensureProgress(CURRENT.id);
+  if(!prog.maxTime[v.id]) prog.maxTime[v.id] = 0;
+
+  /* ============ REJIM A: Kompyuterdan to'g'ridan-to'g'ri (file://) ochilganda ============
+     YouTube'ning kuchli boshqaruv API'si faqat https:// saytdan ishlaydi (YouTube'ning o'z qoidasi).
+     Shuning uchun bu holatda oddiy pleer + qo'lda "Ko'rdim" tugmasi ko'rsatamiz. */
+  if(isLocalFile){
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.youtube.com/embed/${v.youtubeId}?rel=0`;
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.allow = 'autoplay; encrypted-media; fullscreen';
+    iframe.setAttribute('allowfullscreen', 'true');
+    outerDiv.appendChild(iframe);
+
+    const hint = document.createElement('p');
+    hint.className = 'muted';
+    hint.style.cssText = 'font-size:12px;margin:10px 0 0;';
+    hint.textContent = "Eslatma: faylni internet (GitHub Pages) orqali ochsangiz, ketma-ket qulflash va sifat/tezlik nazorati to'liq avtomatik ishlaydi. Hozir kompyuterdan to'g'ridan-to'g'ri ochilgani uchun, videoni ko'rib bo'lgach pastdagi tugmani bosing.";
+    wrap.appendChild(hint);
+
+    const doneBtn = document.createElement('button');
+    doneBtn.className = 'btn btn-primary';
+    doneBtn.style.cssText = 'width:auto;margin-top:12px;';
+    doneBtn.textContent = "✓ Men bu videoni to'liq ko'rdim — Keyingisi";
+    doneBtn.onclick = async ()=>{
+      if(!prog.watched[v.id]){
+        prog.watched[v.id] = true;
+        await saveProgress(CURRENT.id);
+      }
+      PLAYING_VIDEO_ID = null;
+      renderApp();
+      const idx = VIDEOS.findIndex(x=>x.id===v.id);
+      if(idx>=0 && idx < VIDEOS.length-1){
+        PLAYING_VIDEO_ID = VIDEOS[idx+1].id;
+        renderApp();
+      }
+    };
+    wrap.appendChild(doneBtn);
+    return;
+  }
+
+  /* ============ REJIM B: https:// (GitHub Pages va h.k.) — to'liq nazorat ============ */
+  const holderId = 'yt-' + v.id;
+  outerDiv.id = 'ytwrap-' + v.id;
+  const outerId = outerDiv.id;
+
+  const playerDiv = document.createElement('div');
+  playerDiv.id = holderId;
+  playerDiv.style.width = '100%';
+  playerDiv.style.height = '100%';
+  playerDiv.style.pointerEvents = 'none';
+  outerDiv.appendChild(playerDiv);
+
+  const controlBar = document.createElement('div');
+  controlBar.style.cssText = 'background:var(--surface-2);border-top:1px solid var(--line);padding:10px 14px;border-radius:0 0 10px 10px;margin-top:-1px;display:flex;align-items:center;gap:12px;';
+  const playBtn = document.createElement('button');
+  playBtn.textContent = '▶';
+  playBtn.style.cssText = 'background:var(--amber);color:#1a1400;border:none;border-radius:50%;width:34px;height:34px;font-size:14px;flex-shrink:0;';
+  const progWrap = document.createElement('div');
+  progWrap.style.cssText = 'flex:1;height:8px;background:var(--line);border-radius:6px;position:relative;cursor:pointer;';
+  const progFill = document.createElement('div');
+  progFill.style.cssText = 'height:100%;width:0%;background:var(--amber);border-radius:6px;';
+  progWrap.appendChild(progFill);
+  const timeLabel = document.createElement('span');
+  timeLabel.style.cssText = 'font-size:12px;color:var(--muted);flex-shrink:0;min-width:80px;text-align:right;';
+  timeLabel.textContent = '0:00 / 0:00';
+  controlBar.appendChild(playBtn);
+  controlBar.appendChild(progWrap);
+  controlBar.appendChild(timeLabel);
+  wrap.appendChild(controlBar);
+
+  const qualityRow = document.createElement('div');
+  qualityRow.className = 'speedRow';
+  qualityRow.innerHTML = '<span>Sifat:</span>';
+  wrap.appendChild(qualityRow);
+
+  function fmtTime(s){
+    s = Math.max(0, Math.floor(s||0));
+    const m = Math.floor(s/60), sec = s%60;
+    return m + ':' + (sec<10?'0':'') + sec;
+  }
+
+  loadYouTubeAPI(()=>{
+    let player = new YT.Player(holderId, {
+      videoId: v.youtubeId,
+      playerVars: { rel: 0, modestbranding: 1, fs: 0, controls: 0, disablekb: 1, iv_load_policy: 3 },
+      events: {
+        onReady: ()=>{
+          try{
+            const levels = player.getAvailableQualityLevels() || [];
+            const qualityMap = [
+              {code:'hd2160', label:'4K'},
+              {code:'hd1440', label:'1440p'},
+              {code:'hd1080', label:'1080p'},
+              {code:'hd720', label:'720p'},
+              {code:'large', label:'480p'},
+              {code:'auto', label:'Auto'}
+            ];
+            const available = qualityMap.filter(q => q.code==='auto' || levels.includes(q.code));
+            available.forEach(q=>{
+              const b = document.createElement('button');
+              b.className = 'speedBtn' + (q.code==='auto' ? ' active' : '');
+              b.textContent = q.label;
+              b.onclick = ()=>{
+                player.setPlaybackQuality(q.code);
+                qualityRow.querySelectorAll('.speedBtn').forEach(x=>x.classList.remove('active'));
+                b.classList.add('active');
+              };
+              qualityRow.appendChild(b);
+            });
+            if(available.length <= 1){
+              const note = document.createElement('span');
+              note.className = 'muted';
+              note.style.fontSize = '12px';
+              note.textContent = "(bu video YouTube'ga past sifatda yuklangan, boshqa sifat mavjud emas)";
+              qualityRow.appendChild(note);
+            }
+          }catch(e){}
+
+          const fsBtn = document.createElement('button');
+          fsBtn.className = 'speedBtn fsBtn';
+          fsBtn.textContent = "⛶ To'liq ekran";
+          fsBtn.onclick = ()=>{
+            const target = document.getElementById(outerId);
+            if(target.requestFullscreen) target.requestFullscreen().catch(()=>{});
+            else if(target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+          };
+          qualityRow.appendChild(fsBtn);
+
+          playBtn.onclick = ()=>{
+            const state = player.getPlayerState();
+            if(state === YT.PlayerState.PLAYING) player.pauseVideo();
+            else player.playVideo();
+          };
+
+          progWrap.onclick = (e)=>{
+            const dur = player.getDuration() || 0;
+            if(!dur) return;
+            const rect = progWrap.getBoundingClientRect();
+            const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+            const target = ratio * dur;
+            const allowed = Math.min(target, prog.maxTime[v.id]);
+            player.seekTo(allowed, true);
+          };
+
+          let promptShown = false;
+          if(ACTIVE_YT_POLL) clearInterval(ACTIVE_YT_POLL);
+          ACTIVE_YT_POLL = setInterval(()=>{
+            try{
+              const t = player.getCurrentTime();
+              const dur = player.getDuration() || 0;
+              if(t > prog.maxTime[v.id] + 0.6){
+                player.seekTo(prog.maxTime[v.id], true);
+              } else if(t > prog.maxTime[v.id]){
+                prog.maxTime[v.id] = t;
+              }
+              if(dur && prog.maxTime[v.id] >= dur - 0.8 && !promptShown){
+                promptShown = true;
+                if(!prog.watched[v.id]){
+                  prog.watched[v.id] = true;
+                  saveProgress(CURRENT.id);
+                }
+                toast("Video tugatildi ✓");
+                renderNextPrompt(wrap, v);
+                clearInterval(ACTIVE_YT_POLL);
+                return;
+              }
+              const state = player.getPlayerState();
+              playBtn.textContent = (state === YT.PlayerState.PLAYING) ? '⏸' : '▶';
+              if(dur){
+                progFill.style.width = Math.min(100, (t/dur)*100) + '%';
+                timeLabel.textContent = fmtTime(t) + ' / ' + fmtTime(dur);
+              }
+            }catch(e){}
+          }, 300);
+        },
+        onStateChange: (e)=>{
+          if(e.data === YT.PlayerState.ENDED){
+            const dur = player.getDuration() || 0;
+            if(!prog.watched[v.id] && (!dur || prog.maxTime[v.id] >= dur * 0.85)){
+              prog.watched[v.id] = true;
+              saveProgress(CURRENT.id);
+              toast("Video tugatildi ✓");
+              renderNextPrompt(wrap, v);
+            } else if(!prog.watched[v.id]){
+              player.seekTo(prog.maxTime[v.id], true);
+              toast("Videoni to'liq ko'rishingiz kerak — sakrab o'tib bo'lmaydi");
+            }
+          }
+        }
+      }
+    });
+  });
+}
+
+/* ================= PLAYER ================= */
+function renderPlayer(content, videoId){
+  const idx = VIDEOS.findIndex(v=>v.id===videoId);
+  const v = VIDEOS[idx];
+  if(!v){ PLAYING_VIDEO_ID=null; renderVideosTab(content); return; }
+
+  const back = document.createElement('button');
+  back.className = 'btn btn-secondary backBtn';
+  back.textContent = '← Ro\'yxatga qaytish';
+  back.onclick = ()=>{ PLAYING_VIDEO_ID=null; renderApp(); };
+  content.appendChild(back);
+
+  const h = document.createElement('h2');
+  h.textContent = v.title;
+  content.appendChild(h);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'playerWrap';
+  content.appendChild(wrap);
+
+  if(v.sourceType === 'youtube'){
+    renderYoutubePlayer(wrap, v);
+    return;
+  }
+
+  // Barqaror tashqi konteyner — video keyinchalik almashtirilsa ham (masalan Drive zaxira),
+  // to'liq ekran shu konteynerga qaratiladi, hech qachon "o'lik" elementga bog'lanib qolmaydi
+  const outer = document.createElement('div');
+  outer.style.width = '100%';
+  outer.style.aspectRatio = '16/9';
+  outer.style.minHeight = '320px';
+  outer.style.borderRadius = '10px';
+  outer.style.overflow = 'hidden';
+  outer.style.background = '#000';
+  wrap.appendChild(outer);
+
+  const video = document.createElement('video');
+  video.controls = true;
+  video.src = v.url;
+  video.style.width = '100%';
+  video.style.height = '100%';
+  video.style.display = 'block';
+  outer.appendChild(video);
+
+  const ctrlRow = document.createElement('div');
+  ctrlRow.className = 'speedRow';
+
+  const fsBtn = document.createElement('button');
+  fsBtn.className = 'speedBtn fsBtn';
+  fsBtn.textContent = "⛶ To'liq ekran";
+  fsBtn.onclick = ()=>{
+    const req = outer.requestFullscreen || outer.webkitRequestFullscreen || outer.mozRequestFullScreen || outer.msRequestFullscreen;
+    if(req){
+      const r = req.call(outer);
+      if(r && r.catch) r.catch(()=>{
+        if(video.requestFullscreen) video.requestFullscreen().catch(()=>{});
+        else if(video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      });
+    } else if(video.webkitEnterFullscreen){
+      video.webkitEnterFullscreen();
+    }
+  };
+  ctrlRow.appendChild(fsBtn);
+  wrap.appendChild(ctrlRow);
+
+  const prog = ensureProgress(CURRENT.id);
+  if(!prog.maxTime[v.id]) prog.maxTime[v.id] = 0;
+  let nativePromptShown = false;
+
+  video.addEventListener('timeupdate', ()=>{
+    if(video.currentTime > prog.maxTime[v.id]){
+      prog.maxTime[v.id] = video.currentTime;
+    }
+    // video deyarli oxirigacha yetganda ("tugadi" signali kelmasa/kech kelsa ham) o'zimiz belgilaymiz va tugmani chiqaramiz
+    const dur = video.duration || 0;
+    if(dur && prog.maxTime[v.id] >= dur - 0.8 && !nativePromptShown){
+      nativePromptShown = true;
+      if(!prog.watched[v.id]){
+        prog.watched[v.id] = true;
+        saveProgress(CURRENT.id);
+      }
+      toast("Video tugatildi ✓");
+      renderNextPrompt(wrap, v);
+    }
+  });
+  video.addEventListener('seeking', ()=>{
+    // haqiqatan ko'rilgan nuqtadan oldinga sakrashga (hatto ozgina bo'lsa ham) yo'l qo'ymaymiz
+    if(video.currentTime > prog.maxTime[v.id] + 0.4){
+      video.currentTime = prog.maxTime[v.id];
+    }
+  });
+  video.addEventListener('ended', async ()=>{
+    // Zaxira: agar yuqoridagi timeupdate tekshiruvi biror sababga ko'ra ushlamagan bo'lsa, shu yerda tutamiz
+    const dur = video.duration || 0;
+    if(!prog.watched[v.id] && dur && prog.maxTime[v.id] < dur * 0.85){
+      video.currentTime = prog.maxTime[v.id];
+      toast("Videoni to'liq ko'rishingiz kerak — sakrab o'tib bo'lmaydi");
+      return;
+    }
+    if(!nativePromptShown){
+      nativePromptShown = true;
+      if(!prog.watched[v.id]){
+        prog.watched[v.id] = true;
+        await saveProgress(CURRENT.id);
+      }
+      toast("Video tugatildi ✓");
+      renderNextPrompt(wrap, v);
+    }
+  });
+  video.addEventListener('error', ()=>{
+    if(v.sourceType === 'gdrive' && v.gdrivePreview && !video.dataset.fallbackApplied){
+      video.dataset.fallbackApplied = '1';
+      const iframe = document.createElement('iframe');
+      iframe.src = v.gdrivePreview;
+      iframe.style.width = '100%';
+      iframe.style.height = '100%';
+      iframe.style.border = 'none';
+      iframe.allow = 'autoplay; fullscreen';
+      iframe.setAttribute('allowfullscreen', 'true');
+      video.replaceWith(iframe);
+      toast("Bu Drive video to'g'ridan-to'g'ri ochilmadi — oddiy pleer ko'rsatildi");
+    }
+  });
+}
+
+/* ================= VIDEO TUGAGANDA "KEYINGISI" TUGMASI ================= */
+function renderNextPrompt(container, v){
+  if(container.querySelector('.nextPromptCard')) return; // ikki marta chiqmasin
+  const idx = VIDEOS.findIndex(x=>x.id===v.id);
+  const hasNext = idx>=0 && idx < VIDEOS.length-1;
+  const box = document.createElement('div');
+  box.className = 'card nextPromptCard';
+  box.style.textAlign = 'center';
+  box.innerHTML = `<h3 style="margin-top:0;color:var(--green);">✓ Video tugatildi</h3>`;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-primary';
+  btn.style.width = 'auto';
+  if(hasNext){
+    btn.textContent = "Keyingisi →";
+    btn.onclick = ()=>{ PLAYING_VIDEO_ID = VIDEOS[idx+1].id; renderApp(); };
+  } else {
+    btn.textContent = "Ro'yxatga qaytish";
+    btn.onclick = ()=>{ PLAYING_VIDEO_ID = null; renderApp(); };
+  }
+  box.appendChild(document.createElement('br'));
+  box.appendChild(btn);
+  container.appendChild(box);
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ================= ADD VIDEO TAB ================= */
+function renderAddVideoTab(content){
+  const h = document.createElement('h2');
+  h.textContent = "Yangi video qo'shish";
+  content.appendChild(h);
+
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const titleField = document.createElement('div');
+  titleField.className = 'field';
+  titleField.innerHTML = `<label>Video nomi</label><input id="newVTitle" type="text" placeholder="Masalan: 1-dars — Kirish">`;
+  card.appendChild(titleField);
+
+  const uField = document.createElement('div');
+  uField.className = 'field';
+  uField.innerHTML = `<label>Video havolasi</label><input id="newVUrl" type="text" placeholder="YouTube, Google Drive yoki to'g'ridan-to'g'ri .mp4 link">
+    <div style="margin-top:8px;font-size:12px;color:var(--muted);">YouTube va Google Drive havolalarini o'zi avtomatik tanib oladi</div>`;
+  card.appendChild(uField);
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-primary';
+  btn.style.width = 'auto';
+  btn.textContent = "Qo'shish";
+  btn.onclick = async ()=>{
+    const title = document.getElementById('newVTitle').value.trim();
+    if(!title){ toast("Video nomini kiriting"); return; }
+    const url = document.getElementById('newVUrl').value.trim();
+    if(!url){ toast("Havolani kiriting"); return; }
+    const parsed = parseVideoUrl(url);
+    const vObj = {title, sourceType: parsed.type, rawUrl: url, createdBy: CURRENT.username};
+    if(parsed.type === 'youtube'){
+      vObj.youtubeId = parsed.id;
+    } else if(parsed.type === 'gdrive'){
+      vObj.url = `https://drive.google.com/uc?export=download&id=${parsed.id}`;
+      vObj.gdrivePreview = `https://drive.google.com/file/d/${parsed.id}/preview`;
+    } else {
+      vObj.url = url;
+    }
+    await addVideoDoc(vObj);
+    toast("Video qo'shildi");
+    renderApp();
+  };
+  card.appendChild(document.createElement('br'));
+  card.appendChild(btn);
+  content.appendChild(card);
+
+  const hint = document.createElement('p');
+  hint.className = 'muted';
+  hint.style.fontSize = '13px';
+  hint.textContent = "Videolar shu ro'yxatga qo'shilgan tartibda ochiladi: har bir o'quvchi avvalgi videoni to'liq ko'rmaguncha keyingisi ochilmaydi.";
+  content.appendChild(hint);
+}
+
+/* ================= MANAGE VIDEOS TAB ================= */
+function renderManageVideosTab(content){
+  const h = document.createElement('h2');
+  h.textContent = "Videolarni boshqarish";
+  content.appendChild(h);
+
+  if(!VIDEOS.length){
+    const e = document.createElement('div');
+    e.className = 'emptyState';
+    e.textContent = "Video yo'q";
+    content.appendChild(e);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  const table = document.createElement('table');
+  table.innerHTML = `<tr><th>#</th><th>Nomi</th><th>Qo'shgan</th><th></th></tr>`;
+  VIDEOS.forEach((v, idx)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${idx+1}</td><td>${escapeHtml(v.title)}</td><td class="muted">${escapeHtml(v.createdBy||'-')}</td>`;
+    const td = document.createElement('td');
+    const del = document.createElement('button');
+    del.className = 'btn btn-danger';
+    del.textContent = "O'chirish";
+    del.onclick = async ()=>{
+      const ok = await customConfirm("Bu keyingi videolar tartibiga ta'sir qiladi.", {title: "Videoni o'chirish", okText: "Ha, o'chirish"});
+      if(!ok) return;
+      await deleteVideoDoc(v);
+      renderApp();
+    };
+    td.appendChild(del);
+    tr.appendChild(td);
+    table.appendChild(tr);
+  });
+  card.appendChild(table);
+  content.appendChild(card);
+}
+
+/* ================= STUDENTS TAB ================= */
+function renderStudentsTab(content){
+  const h = document.createElement('h2');
+  h.textContent = "O'quvchilar boshqaruvi";
+  content.appendChild(h);
+
+  const addCard = document.createElement('div');
+  addCard.className = 'card';
+  const helperCheckboxHtml = isAdmin(CURRENT) ? `
+    <div class="checkRow">
+      <input type="checkbox" id="newSHelper">
+      <label for="newSHelper">Admin imkoniyatini berish (video va o'quvchi qo'sha oladi, lekin o'chira olmaydi)</label>
+    </div>` : '';
+  addCard.innerHTML = `
+    <h3>Yangi o'quvchi qo'shish</h3>
+    <div class="row">
+      <div class="field"><label>Login</label><input id="newSUser" type="text" placeholder="login"></div>
+      <div class="field"><label>Parol (ixtiyoriy)</label><input id="newSPass" type="text" placeholder="bo'sh qoldirilsa parolsiz kiradi"></div>
+    </div>
+    ${helperCheckboxHtml}
+  `;
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn btn-primary';
+  addBtn.style.width = 'auto';
+  addBtn.textContent = "O'quvchi qo'shish";
+  addBtn.onclick = async ()=>{
+    const uname = document.getElementById('newSUser').value.trim();
+    const pass = document.getElementById('newSPass').value;
+    const helperEl = document.getElementById('newSHelper');
+    const helper = helperEl ? helperEl.checked : false;
+    if(!uname){ toast("Login kiriting"); return; }
+    if(USERS.find(x=>x.username===uname)){ toast("Bu login band"); return; }
+    await addUserDoc({username: uname, password: pass || '', role:'student', isHelper: helper});
+    toast("O'quvchi qo'shildi");
+    renderApp();
+  };
+  addCard.appendChild(document.createElement('br'));
+  addCard.appendChild(addBtn);
+  content.appendChild(addCard);
+
+  const listCard = document.createElement('div');
+  listCard.className = 'card';
+  const students = USERS.filter(u=>u.role==='student');
+  const totalVideos = VIDEOS.length;
+  if(!students.length){
+    listCard.innerHTML = '<h3>O\'quvchilar ro\'yxati</h3><div class="emptyState">Hozircha o\'quvchi yo\'q</div>';
+  } else {
+    const table = document.createElement('table');
+    table.innerHTML = `<tr><th>Login</th><th>Parol</th><th>Huquq</th><th>Progress</th><th></th></tr>`;
+    students.forEach(s=>{
+      const prog = ensureProgress(s.id);
+      const watchedCount = VIDEOS.filter(v=>prog.watched[v.id]).length;
+      const percent = totalVideos ? Math.round((watchedCount/totalVideos)*100) : 0;
+      const progressText = totalVideos
+        ? `${watchedCount}/${totalVideos} ta video (${percent}%)`
+        : 'Video yo\'q';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(s.username)}</td>
+        <td><code class="mono">${s.password ? escapeHtml(s.password) : "parolsiz"}</code></td>
+        <td>${s.isHelper ? '<span class="pill">Yordamchi (admin huq.)</span>' : '<span class="muted">Oddiy</span>'}</td>
+        <td>${progressText}</td>`;
+      const td = document.createElement('td');
+      if(canDeleteStudent(CURRENT)){
+        const del = document.createElement('button');
+        del.className = 'btn btn-danger';
+        del.textContent = "O'chirish";
+        del.onclick = async ()=>{
+          const ok = await customConfirm(`"${s.username}" o'chirilsin va uning barcha natijalari yo'qotilsinmi?`, {title: "O'quvchini o'chirish", okText: "Ha, o'chirish"});
+          if(!ok) return;
+          await deleteUserDoc(s.id);
+          renderApp();
+        };
+        td.appendChild(del);
+      }
+      tr.appendChild(td);
+      table.appendChild(tr);
+    });
+    listCard.innerHTML = '<h3>O\'quvchilar ro\'yxati</h3>';
+    listCard.appendChild(table);
+  }
+  content.appendChild(listCard);
+}
+
+/* ================= INIT ================= */
+(async function init(){
+  if(!FIREBASE_OK){
+    document.getElementById('configWarning').style.display = 'flex';
+    return;
+  }
+  try{
+    await loadAll();
+  }catch(e){
+    console.error(e);
+    toast("Firebase bilan bog'lanishda xatolik: " + e.message);
+  }
+  document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+})();
+</script>
+</body>
+</html>
