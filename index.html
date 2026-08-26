@@ -905,7 +905,17 @@ function renderPlayer(content, videoId){
   content.appendChild(back);
 
   const h = document.createElement('h2');
+  h.style.display = 'flex';
+  h.style.alignItems = 'center';
+  h.style.gap = '10px';
   h.textContent = v.title;
+  const prog0 = ensureProgress(CURRENT.id);
+  if(prog0.watched[v.id]){
+    const badge = document.createElement('span');
+    badge.textContent = '✓ Ko\'rilgan';
+    badge.style.cssText = 'font-size:12px;font-weight:600;color:var(--green);background:rgba(62,207,142,.12);border:1px solid rgba(62,207,142,.35);padding:4px 10px;border-radius:20px;';
+    h.appendChild(badge);
+  }
   content.appendChild(h);
 
   const wrap = document.createElement('div');
